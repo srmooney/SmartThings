@@ -19,40 +19,43 @@ definition(
     author: "Sean Mooney",
     description: "The ultimate garage door app",
     category: "My Apps",
-    iconUrl: "http://cdn.device-icons.smartthings.com/Transportation/transportation13-icn.png",
-    iconX2Url: "http://cdn.device-icons.smartthings.com/Transportation/transportation13-icn@2x.png",
-    iconX3Url: "http://cdn.device-icons.smartthings.com/Transportation/transportation13-icn@2x.png")
+    iconUrl: "https://raw.githubusercontent.com/srmooney/SmartThings/master/icons/garage.png",
+    iconX2Url: "https://raw.githubusercontent.com/srmooney/SmartThings/master/icons/garage.png",
+    iconX3Url: "https://raw.githubusercontent.com/srmooney/SmartThings/master/icons/garage.png")
 
+//import groovy.time.TimeDuration 
+//import groovy.time.TimeCategory
 
 preferences {
-    page(name: "page1", title: "", uninstall:true, install:true) {
-        section("The Door") {
-            input "doorSensor", "capability.contactSensor", title: "Which Sensor?"
-            input "doorSwitch", "capability.momentary", title: "Which Relay?"
+	page(name: "page1", title: "", uninstall:true, install:true) {
+    	section("The Door") {
+            input "doorSensor", "capability.contactSensor", title: "Which Sensor?", required:true
+            input "doorSwitch", "capability.momentary", title: "Which Relay?", required:true
+            input "doorName", "text", title: "Name", defaultValue:"Garage Door", required:false
         }
         
         section("Settings") {
-            href "page2", title:"Arrival / Departure"
+			href "page2", title:"Arrival / Departure"
             href "page3", title:"Night Settings"
             href "page4", title:"Notifications"
-        }        
+		}        
     }
     
-    //Presence
+    /* Presence */
     page(name: "page2", title: "", uninstall:false, install:false) {
-        section("Arrival / Departure"){
-            input "presenceArrive", "capability.presenceSensor", title: "Open when these people arrive:", multiple:true
-            input "presenceDepart", "capability.presenceSensor", title: "Close when these people leave:", multiple:true
+    	section("Arrival / Departure"){
+        	input "presenceArrive", "capability.presenceSensor", title: "Open when these people arrive:", multiple:true, required: false
+        	input "presenceDepart", "capability.presenceSensor", title: "Close when these people leave:", multiple:true, required: false
         }
     }
     
-    //Night Time
+    /* Night Time */
     page(name: "page3", title: "", uninstall:false, install:false) {
         section ("Night Settings") {
             //input "closeSunset", "enum", title: "Close after sunset", required: false, metadata: [values: ["Yes","No"]]
             input "closeSunset", "bool", title: "Close after sunset", required: false
         }
-        section ("Sunset offset (optional)...") {
+        section ("Sunset offset (optional)...", hideable:true, hidden:true) {
             input "sunsetOffsetValue", "number", title: "Minutes", required: false
             input "sunsetOffsetDir", "enum", title: "Before or After", required: false, metadata: [values: ["Before","After"]]
         }
@@ -61,50 +64,66 @@ preferences {
         }
     }
     
-    //Notification
+    /* Notification */
     page(name: "page4", title: "", uninstall:false, install:true) {
         section () {
             input "notify", "enum", title: "Notify when...", required: false, metadata: [values: ["Opening","Closing"]], multiple: true
         }
+        section () {
+        	paragraph "If left open longer than..."
+            input "notifyLeftOpen", "number", title: "Minutes", required: false
+            paragraph "Repeat until closed..."
+            input "notifyFrequency", "number", title: "Minutes", required: false
+            paragraph "A maximum of..."
+            input "notifyMax", "number", title: "Times", required: false
+            paragraph "Leave empty for unlimited notifications"
+        }
     } 
 }
 
-def installed() {
-    log.debug "Installed with settings: ${settings}"
+def getDoorName() { settings.doorName ?: "Garage Door" }
 
-    initialize()
+def installed() {
+	log.debug "Installed with settings: ${settings}"
+	initialize()
 }
 
 def updated() {
-    log.debug "Updated with settings: ${settings}"
-
-    unsubscribe()
-    initialize()
+	log.debug "Updated with settings: ${settings}"
+	unsubscribe()
+	initialize()
 }
 
 def initialize() {
-    log.debug "Garage Door is ${doorSensor.contactState.value}"
-    // TODO: subscribe to attributes, devices, locations, etc.
-    subscribe(presenceArrive, "presence", presenceHandler)
-    subscribe(presenceDepart, "presence", presenceHandler)
-    subscribe(doorSensor, "contact", contactHandler)
-    subscribe(location, "sunsetTime", sunsetTimeHandler)
-    subscribe(location, "sunriseTime", sunriseTimeHandler)
-    subscribe(app, appTouchHandler)
+	log.debug "${getDoorName()} is ${settings.doorSensor.contactState?.value}"
+	// TODO: subscribe to attributes, devices, locations, etc.
+	subscribe(presenceArrive, "presence", presenceHandler)
+	subscribe(presenceDepart, "presence", presenceHandler)
+	subscribe(doorSensor, "contact", contactHandler)
+	subscribe(location, "sunsetTime", sunsetTimeHandler)
+	subscribe(location, "sunriseTime", sunriseTimeHandler)
+	subscribe(app, appTouchHandler)
 
-    //schedule it to run today too
-    scheduleCloseGarage(location.currentValue("sunsetTime"))
+	//schedule it to run today too
+	scheduleCloseGarage(location.currentValue("sunsetTime"))
+	
+	state.sunriseTime = location.currentValue("sunriseTime")
+	state.sunsetTime = location.currentValue("sunsetTime")
+	state.openTime = 0
+    state.openNotifyCount = 0
+
+	log.debug "state: $state"
     
-    state.sunriseTime = location.currentValue("sunriseTime")
-    state.sunsetTime = location.currentValue("sunsetTime")
-
-    log.debug "state: $state"
+    /* TODO check door state for left open */
+    if (settings.notifyLeftOpen && settings.doorSensor.contactState?.value == "open"){
+    	scheduleDoorCheck()
+    }
 }
 
 /* Events */
 def appTouchHandler(evt){
-    log.debug "appTouchHandler: ${evt}"
-    if (doorSensor.contactState.value == "open"){ close() }
+	log.debug "appTouchHandler: ${evt}"
+	if (doorSensor.contactState.value == "open"){ close() }
     else { open() }
 }
 
@@ -115,94 +134,138 @@ def sunsetTimeHandler(evt) {
 }
 
 def sunriseTimeHandler(evt){
-    state.sunriseTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", evt.value)
-}
-
-def presenceArriveHandler(evt) {
-    log.trace "Arrive: ${evt}"
-    if (evt.value == "present" && doorSensor.contactState.value == "closed") {
-        log.debug "${evt.displayName} has arrived at the ${location}"
-        open()
-        if (notify.contains("Opening")){
-            sendPush("Opening Garage due to ${evt.displayName}s arrival")
-        }
-    }
+	state.sunriseTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", evt.value)
 }
 
 def presenceHandler(evt) {
-    //log.debug "${evt.displayName} has left the ${location}"
+	//log.debug "${evt.displayName} has left the ${location}"
 
-    if (evt.value == "not present" && doorSensor.contactState.value == "open") {
-        for (person in presenceDepart) {
+	if (evt.value == "not present" && doorSensor.contactState.value == "open") {
+    	for (person in presenceDepart) {
             if (person.toString() == evt.displayName){
-                close()
+				close()
                 if (notify.contains("Closing")){
-                    def msg = "Closing Garage due to ${evt.displayName}s departure"
+                	def msg = "Closing ${getDoorName()} due to the departure of ${evt.displayName}"
                     log.debug "$msg"
                     sendPush("$msg")
                 }
                 break
             }
         }
-    }
+	}
     
     if (evt.value == "present" && doorSensor.contactState.value == "closed") {
-        for (person in presenceArrive) {
+    	for (person in presenceArrive) {
             if (person.toString() == evt.displayName){
-                open()
+				open()
                 if (notify.contains("Opening")){
-                    def msg = "Opening Garage due to ${evt.displayName}s arrival"
+                	def msg = "Opening ${getDoorName()} due to the arriaval of ${evt.displayName}"
                     log.debug "$msg"
                     sendPush("$msg")
                 }
                 break
             }
         }
-    }
+	}
 }
 
 def contactHandler(evt) {
-    log.debug "Contact is in ${evt.value} state"
+	log.debug "Contact is in ${evt.value} state"
     if(evt.value == "open" && notify.contains("Opening")) {
-        sendPush("Garage opened")
+    	def msg = "${getDoorName()} opened"
+        log.debug "$msg"
+        sendPush("$msg")
     }
     if(evt.value == "closed" && notify.contains("Closing")){
-        sendPush("Garage closed")
+        def msg = "${getDoorName()} closed"
+        log.debug "$msg"
+        sendPush("$msg")
     }
     
     if (closeSunset == true && evt.value == "open" && closeAfter){
-        runonce(now + closeAfter, closeWhenDark)
+    	runonce(now + closeAfter, closeWhenDark)
+    }
+    
+    if (notifyLeftOpen && evt.value == "open"){
+    	scheduleDoorCheck()
+    }
+    
+    if (evt.value == "close"){
+    	state.openTime = 0
+        state.openNotifyCount = 0
     }
 }
 
-/* Actions */
+/* Methods */
+def formatSeconds(seconds){
+	if (seconds < 60) { return "$seconds seconds" }
+    def minutes = (seconds / 60)
+    if (minutes == 1) { return "$minutes minute" }
+    if (minutes > 0 && minutes < 59) { return "$minutes minutes" }
+    def hours = (minutes / 60)
+    if (hours == 1) { return "$hours hour" }
+    if (hours > 0 && hours < 24) { return "$hours hours" }
+    def days = (hours / 24)
+    if (days == 1) { return "$days day" }
+    if (days > 1) { return "$days days" }
+}
+
+def scheduleDoorCheck() {
+	def delay = (notifyLeftOpen * 60)
+    state.openTime = delay
+    log.debug "Schedule door check in $delay secs"
+    runIn(delay, doorOpenTooLong, [overwrite: false])
+}
+
+def doorOpenTooLong(){
+	log.debug "doorOpenTooLong(): $state.openTime secs"
+    if (doorSensor.latestValue("contact") == "open") {
+    	//def mins = state.openTime / 60
+    	//sendPush("${getDoorName()} left open for ${mins} min${mins > 1 ? "s" : ""}")
+        state.openNotifyCount = state.openNotifyCount + 1
+        
+        if (notifyMax && state.openNotifyCount == notifyMax){
+        	sendPush("Last reminder! ${getDoorName()} left open for ${formatSeconds(state.openTime)}")
+        }        
+        else{
+        	sendPush("${getDoorName()} left open for ${formatSeconds(state.openTime)}")
+        }
+        
+        if (notifyFrequency && (!notifyMax || (notifyMax && state.openNotifyCount < notifyMax))) {
+        	def delay = notifyFrequency * 60
+        	state.openTime = state.openTime + delay
+        	runIn(delay, doorOpenTooLong, [overwrite: false])
+        }
+	}
+}
+
 def close(){
-    log.debug "Close Garage Door"
+	log.debug "Close ${getDoorName()}"
     doorSwitch.push()
 }
 
 def open(){
-    log.debug "Open Garage Door"
+	log.debug "Open ${getDoorName()}"
     doorSwitch.push()
 }
 
 def closeWhenDark(){
-    if (doorSensor.contactState.value == "open") {
-        sendPush("Closing garage, open for $closeAfter mins after sunset")
+	if (doorSensor.contactState.value == "open") {
+    	sendPush("Closing ${getDoorName()}, open for $closeAfter mins after sunset")
         close()
     }
 }
 
 def closeAfterSunset(){
-    state.sunsetTime = now
+	state.sunsetTime = now
     if (closeSunset == true && doorSensor.contactState.value == "open") {
-        sendPush("Closing garage after sunset")
+    	sendPush("Closing ${getDoorName()} after sunset")
         close()
     }
 }
 
 def scheduleCloseGarage(sunsetString) {
-    def dateFormat = "yyyy-MM-dd hh:mm:ss z"
+	def dateFormat = "yyyy-MM-dd hh:mm:ss z"
     
     log.info "sunsetString: ${sunsetString.format(dateFormat, location.timeZone)}"
     //get the Date value for the string
@@ -215,7 +278,7 @@ def scheduleCloseGarage(sunsetString) {
     def sunsetOffset = new Date(sunsetTime.time + (offsetMinutes * 60 * 1000))
           
 
-    //schedule this to run one time
+	//schedule this to run one time
     log.info "Scheduling for: ${sunsetOffset.format(dateFormat, location.timeZone)} (sunset is ${sunsetTime.format(dateFormat, location.timeZone)})"
     runOnce(sunsetOffset, closeAfterSunset)
     
@@ -226,8 +289,8 @@ def scheduleCloseGarage(sunsetString) {
         def isBefore = !test.before(new Date())
         log.info("isBefore: $isBefore")
         if (isBefore == true) {
-            log.info "Scheduling for: ${test.format(dateFormat, location.timeZone)} (sunset is ${sunsetTime.format(dateFormat, location.timeZone)})"
-            runOnce(test, closeAfterSunset)
+        	log.info "Scheduling for: ${test.format(dateFormat, location.timeZone)} (sunset is ${sunsetTime.format(dateFormat, location.timeZone)})"
+        	runOnce(test, closeAfterSunset)
         }
     }
 }
