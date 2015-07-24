@@ -25,24 +25,24 @@ definition(
 
 
 preferences {
-	page(name: "page1", title: "", uninstall:true, install:true) {
-    	section("The Door") {
+    page(name: "page1", title: "", uninstall:true, install:true) {
+        section("The Door") {
             input "doorSensor", "capability.contactSensor", title: "Which Sensor?"
             input "doorSwitch", "capability.momentary", title: "Which Relay?"
         }
         
         section("Settings") {
-			href "page2", title:"Arrival / Departure"
+            href "page2", title:"Arrival / Departure"
             href "page3", title:"Night Settings"
             href "page4", title:"Notifications"
-		}        
+        }        
     }
     
     //Presence
     page(name: "page2", title: "", uninstall:false, install:false) {
-    	section("Arrival / Departure"){
-        	input "presenceArrive", "capability.presenceSensor", title: "Open when these people arrive:", multiple:true
-        	input "presenceDepart", "capability.presenceSensor", title: "Close when these people leave:", multiple:true
+        section("Arrival / Departure"){
+            input "presenceArrive", "capability.presenceSensor", title: "Open when these people arrive:", multiple:true
+            input "presenceDepart", "capability.presenceSensor", title: "Close when these people leave:", multiple:true
         }
     }
     
@@ -70,41 +70,41 @@ preferences {
 }
 
 def installed() {
-	log.debug "Installed with settings: ${settings}"
+    log.debug "Installed with settings: ${settings}"
 
-	initialize()
+    initialize()
 }
 
 def updated() {
-	log.debug "Updated with settings: ${settings}"
+    log.debug "Updated with settings: ${settings}"
 
-	unsubscribe()
-	initialize()
+    unsubscribe()
+    initialize()
 }
 
 def initialize() {
-	log.debug "Garage Door is ${doorSensor.contactState.value}"
-	// TODO: subscribe to attributes, devices, locations, etc.
-   	subscribe(presenceArrive, "presence", presenceHandler)
+    log.debug "Garage Door is ${doorSensor.contactState.value}"
+    // TODO: subscribe to attributes, devices, locations, etc.
+    subscribe(presenceArrive, "presence", presenceHandler)
     subscribe(presenceDepart, "presence", presenceHandler)
     subscribe(doorSensor, "contact", contactHandler)
     subscribe(location, "sunsetTime", sunsetTimeHandler)
     subscribe(location, "sunriseTime", sunriseTimeHandler)
     subscribe(app, appTouchHandler)
-    
+
     //schedule it to run today too
     scheduleCloseGarage(location.currentValue("sunsetTime"))
     
     state.sunriseTime = location.currentValue("sunriseTime")
     state.sunsetTime = location.currentValue("sunsetTime")
-    
+
     log.debug "state: $state"
 }
 
 /* Events */
 def appTouchHandler(evt){
-	log.debug "appTouchHandler: ${evt}"
-	if (doorSensor.contactState.value == "open"){ close() }
+    log.debug "appTouchHandler: ${evt}"
+    if (doorSensor.contactState.value == "open"){ close() }
     else { open() }
 }
 
@@ -115,94 +115,94 @@ def sunsetTimeHandler(evt) {
 }
 
 def sunriseTimeHandler(evt){
-	state.sunriseTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", evt.value)
+    state.sunriseTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", evt.value)
 }
 
 def presenceArriveHandler(evt) {
-	log.trace "Arrive: ${evt}"
-	if (evt.value == "present" && doorSensor.contactState.value == "closed") {
-		log.debug "${evt.displayName} has arrived at the ${location}"
+    log.trace "Arrive: ${evt}"
+    if (evt.value == "present" && doorSensor.contactState.value == "closed") {
+        log.debug "${evt.displayName} has arrived at the ${location}"
         open()
         if (notify.contains("Opening")){
-        	sendPush("Opening Garage due to ${evt.displayName}s arrival")
+            sendPush("Opening Garage due to ${evt.displayName}s arrival")
         }
-	}
+    }
 }
 
 def presenceHandler(evt) {
-	//log.debug "${evt.displayName} has left the ${location}"
+    //log.debug "${evt.displayName} has left the ${location}"
 
-	if (evt.value == "not present" && doorSensor.contactState.value == "open") {
-    	for (person in presenceDepart) {
+    if (evt.value == "not present" && doorSensor.contactState.value == "open") {
+        for (person in presenceDepart) {
             if (person.toString() == evt.displayName){
-				close()
+                close()
                 if (notify.contains("Closing")){
-                	def msg = "Closing Garage due to ${evt.displayName}s departure"
+                    def msg = "Closing Garage due to ${evt.displayName}s departure"
                     log.debug "$msg"
                     sendPush("$msg")
                 }
                 break
             }
         }
-	}
+    }
     
     if (evt.value == "present" && doorSensor.contactState.value == "closed") {
-    	for (person in presenceArrive) {
+        for (person in presenceArrive) {
             if (person.toString() == evt.displayName){
-				open()
+                open()
                 if (notify.contains("Opening")){
-                	def msg = "Opening Garage due to ${evt.displayName}s arrival"
+                    def msg = "Opening Garage due to ${evt.displayName}s arrival"
                     log.debug "$msg"
                     sendPush("$msg")
                 }
                 break
             }
         }
-	}
+    }
 }
 
 def contactHandler(evt) {
-	log.debug "Contact is in ${evt.value} state"
+    log.debug "Contact is in ${evt.value} state"
     if(evt.value == "open" && notify.contains("Opening")) {
         sendPush("Garage opened")
     }
     if(evt.value == "closed" && notify.contains("Closing")){
-    	sendPush("Garage closed")
+        sendPush("Garage closed")
     }
     
     if (closeSunset == true && evt.value == "open" && closeAfter){
-    	runonce(now + closeAfter, closeWhenDark)
+        runonce(now + closeAfter, closeWhenDark)
     }
 }
 
 /* Actions */
 def close(){
-	log.debug "Close Garage Door"
+    log.debug "Close Garage Door"
     doorSwitch.push()
 }
 
 def open(){
-	log.debug "Open Garage Door"
+    log.debug "Open Garage Door"
     doorSwitch.push()
 }
 
 def closeWhenDark(){
-	if (doorSensor.contactState.value == "open") {
-    	sendPush("Closing garage, open for $closeAfter mins after sunset")
+    if (doorSensor.contactState.value == "open") {
+        sendPush("Closing garage, open for $closeAfter mins after sunset")
         close()
     }
 }
 
 def closeAfterSunset(){
-	state.sunsetTime = now
+    state.sunsetTime = now
     if (closeSunset == true && doorSensor.contactState.value == "open") {
-    	sendPush("Closing garage after sunset")
+        sendPush("Closing garage after sunset")
         close()
     }
 }
 
 def scheduleCloseGarage(sunsetString) {
-	def dateFormat = "yyyy-MM-dd hh:mm:ss z"
+    def dateFormat = "yyyy-MM-dd hh:mm:ss z"
     
     log.info "sunsetString: ${sunsetString.format(dateFormat, location.timeZone)}"
     //get the Date value for the string
@@ -215,7 +215,7 @@ def scheduleCloseGarage(sunsetString) {
     def sunsetOffset = new Date(sunsetTime.time + (offsetMinutes * 60 * 1000))
           
 
-	//schedule this to run one time
+    //schedule this to run one time
     log.info "Scheduling for: ${sunsetOffset.format(dateFormat, location.timeZone)} (sunset is ${sunsetTime.format(dateFormat, location.timeZone)})"
     runOnce(sunsetOffset, closeAfterSunset)
     
@@ -226,8 +226,8 @@ def scheduleCloseGarage(sunsetString) {
         def isBefore = !test.before(new Date())
         log.info("isBefore: $isBefore")
         if (isBefore == true) {
-        	log.info "Scheduling for: ${test.format(dateFormat, location.timeZone)} (sunset is ${sunsetTime.format(dateFormat, location.timeZone)})"
-        	runOnce(test, closeAfterSunset)
+            log.info "Scheduling for: ${test.format(dateFormat, location.timeZone)} (sunset is ${sunsetTime.format(dateFormat, location.timeZone)})"
+            runOnce(test, closeAfterSunset)
         }
     }
 }
