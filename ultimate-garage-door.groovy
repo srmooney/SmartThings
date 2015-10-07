@@ -110,27 +110,27 @@ def initialize() {
 	state.sunriseTime = location.currentValue("sunriseTime")
 	state.sunsetTime = location.currentValue("sunsetTime")
 	state.openTime = 0
-    state.openNotifyCount = 0
+    	state.openNotifyCount = 0
 
 	log.debug "state: $state"
     
-    /* TODO check door state for left open */
-    if (settings.notifyLeftOpen && settings.doorSensor.contactState?.value == "open"){
-    	scheduleDoorCheck()
-    }
+    	/* TODO check door state for left open */
+    	if (settings.notifyLeftOpen && settings.doorSensor.contactState?.value == "open"){
+    		scheduleDoorCheck()
+    	}
 }
 
 /* Events */
 def appTouchHandler(evt){
 	log.debug "appTouchHandler: ${evt}"
 	if (doorSensor.contactState.value == "open"){ close() }
-    else { open() }
+    	else { open() }
 }
 
 def sunsetTimeHandler(evt) {
-    log.debug "sunset event $evt"
-    sendPush("Sunset: ${evt.value}")
-    scheduleCloseGarage(evt.value)
+	log.debug "sunset event $evt"
+	sendPush("Sunset: ${evt.value}")
+	scheduleCloseGarage(evt.value)
 }
 
 def sunriseTimeHandler(evt){
@@ -143,7 +143,7 @@ def presenceHandler(evt) {
 	if (evt.value == "not present" && doorSensor.contactState.value == "open") {
     	for (person in presenceDepart) {
             if (person.toString() == evt.displayName){
-				close()
+		close()
                 if (notify.contains("Closing")){
                 	def msg = "Closing ${getDoorName()} due to the departure of ${evt.displayName}"
                     log.debug "$msg"
@@ -157,11 +157,11 @@ def presenceHandler(evt) {
     if (evt.value == "present" && doorSensor.contactState.value == "closed") {
     	for (person in presenceArrive) {
             if (person.toString() == evt.displayName){
-				open()
+		open()
                 if (notify.contains("Opening")){
                 	def msg = "Opening ${getDoorName()} due to the arriaval of ${evt.displayName}"
-                    log.debug "$msg"
-                    sendPush("$msg")
+                	log.debug "$msg"
+                	sendPush("$msg")
                 }
                 break
             }
@@ -183,7 +183,7 @@ def contactHandler(evt) {
     }
     
     if (closeSunset == true && evt.value == "open" && closeAfter){
-    	runonce(now + closeAfter, closeWhenDark)
+    	runOnce(now + closeAfter, closeWhenDark)
     }
     
     if (notifyLeftOpen && evt.value == "open"){
