@@ -98,6 +98,8 @@ def initialize() {
 	subscribe(presenceArrive, "presence", presenceHandler)
 	subscribe(presenceDepart, "presence", presenceHandler)
 	subscribe(doorSensor, "contact", contactHandler)
+    subscribe(location, "sunsetTime", sunsetTimeHandler)
+    subscribe(location, "sunriseTime", sunriseTimeHandler)
 	subscribe(app, appTouchHandler)
 
 	state.openTime = 0
@@ -120,7 +122,7 @@ def initialize() {
             runOnce(new Date(sunset), closeAfterSunset)
         }
     }
-    
+
 }
 
 
