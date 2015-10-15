@@ -13,6 +13,7 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+ 
 definition(
     name: "Ultimate Garage Door",
     namespace: "srmooney",
@@ -90,6 +91,7 @@ def installed() {
 def updated() {
 	log.debug "Updated with settings: ${settings}"
 	unsubscribe()
+	unschedule()
 	initialize()
 }
 
@@ -116,10 +118,11 @@ def initialize() {
 
     /* If sunset is still to come, schedule closeAfterSunset */
     if (settings.closeSunset) {
-        def sunset = getSunriseAndSunset().sunset.time + getSunsetOffsetValue()
-        if (sunset > now()) {
-            log.debug "schedule close on $sunset, ${new Date(sunset)}"
-            runOnce(new Date(sunset), closeAfterSunset)
+        def sunsetTime = getSunriseAndSunset().sunset.time + getSunsetOffsetValue()
+        log.debug "sunset today: ${new Date(sunsetTime)} (${formatLocalDate(sunsetTime)} local time)"
+        if (sunsetTime > now()) {
+            log.debug "schedule close on $sunsetTime, ${new Date(sunsetTime)}"
+            runOnce(new Date(sunsetTime), closeAfterSunset)
         }
     }
 
@@ -198,8 +201,10 @@ def contactHandler(evt) {
 }
 
 def sunsetTimeHandler(evt) {
-    if (closeSunset) {
-        def sunsetTomorrow = evt.value.time + getSunsetOffsetValue()
+	def sunsetTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", evt.value)
+	def sunsetTomorrow = sunsetTime.time + getSunsetOffsetValue()
+    sendPush("Next Sunset: ${new Date(sunsetTomorrow)} (${formatLocalDate(sunsetTomorrow)} local time)")
+    if (settings.closeSunset) {        
         log.debug "schedule close for $sunsetTomorrow, ${new Date(sunsetTomorrow)}"
         runOnce(new Date(sunsetTomorrow), closeAfterSunset)
     }
@@ -211,6 +216,10 @@ def sunriseTimeHandler(evt){
 /************************************************
  * Methods
  ************************************************/
+
+def formatLocalDate(epoch){
+	new Date(epoch).format('M-d-yyyy hh:mm:ss a',location.timeZone)
+}
 
 def formatSeconds(seconds){
 	if (seconds < 60) { return "$seconds seconds" }
